@@ -1,0 +1,77 @@
+-- Упрощённая схема для вашего main.py
+PRAGMA foreign_keys = ON;
+
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY,
+    login TEXT UNIQUE NOT NULL,
+    password TEXT NOT NULL,
+    full_name TEXT,
+    role_id INTEGER NOT NULL   -- 2=client, 3=manager, 4=admin
+);
+
+CREATE TABLE products (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    price REAL NOT NULL,
+    category TEXT,
+    brand TEXT,
+    image_path TEXT,
+    stock INTEGER DEFAULT 0,
+    discount REAL DEFAULT 0
+);
+
+CREATE TABLE pickup_points (
+    id INTEGER PRIMARY KEY,
+    address TEXT NOT NULL,
+    work_hours TEXT,
+    phone TEXT
+);
+
+CREATE TABLE orders (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    pickup_point_id INTEGER,
+    order_date TEXT DEFAULT CURRENT_DATE,
+    status TEXT DEFAULT 'new',
+    total_amount REAL DEFAULT 0,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (pickup_point_id) REFERENCES pickup_points(id)
+);
+
+CREATE TABLE order_items (
+    id INTEGER PRIMARY KEY,
+    order_id INTEGER NOT NULL,
+    product_id INTEGER NOT NULL,
+    quantity INTEGER NOT NULL,
+    unit_price REAL NOT NULL,
+    FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+    FOREIGN KEY (product_id) REFERENCES products(id)
+);
+
+-- Триггеры для пересчёта суммы заказа
+CREATE TRIGGER update_total_insert
+AFTER INSERT ON order_items
+BEGIN
+    UPDATE orders SET total_amount = (
+        SELECT COALESCE(SUM(quantity * unit_price), 0)
+        FROM order_items WHERE order_id = NEW.order_id
+    ) WHERE id = NEW.order_id;
+END;
+
+CREATE TRIGGER update_total_update
+AFTER UPDATE ON order_items
+BEGIN
+    UPDATE orders SET total_amount = (
+        SELECT COALESCE(SUM(quantity * unit_price), 0)
+        FROM order_items WHERE order_id = NEW.order_id
+    ) WHERE id = NEW.order_id;
+END;
+
+CREATE TRIGGER update_total_delete
+AFTER DELETE ON order_items
+BEGIN
+    UPDATE orders SET total_amount = (
+        SELECT COALESCE(SUM(quantity * unit_price), 0)
+        FROM order_items WHERE order_id = OLD.order_id
+    ) WHERE id = OLD.order_id;
+END;
